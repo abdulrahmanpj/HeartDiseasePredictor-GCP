@@ -1,5 +1,8 @@
 Dockerfile
 README.md
+*.ipynb_checkpoints
+*.csv
+*.ipynb
 *.pyc
 *.pyo
 *.pyd
