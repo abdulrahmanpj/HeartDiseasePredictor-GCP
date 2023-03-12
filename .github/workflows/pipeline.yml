@@ -1,40 +1,42 @@
-# .github/workflows/deploy.yml
-name: HeartDiseasePredictor-app
+name: Docker
+
 on:
   push:
-    branches:
-      - main
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
 jobs:
-  deploy:
-    name: Deploying HeartDiseasePredictor-app
-    runs-on: ubuntu-latest
-    if: "contains(github.event.head_commit.message, 'run pipeline')"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
 
-      # Build and push image to Google Container Registry
-      - name: Setting up
-        uses: google-github-actions/setup-gcloud@master
-        with:
-          version: '286.0.0'
-          service_account_key: ${{ secrets.GCP_SA_KEY_JSON }}
-          service_account_email: "YOUR_EMAIL"
-          project_id: YOUR_PROJECT_ID
+    deploy:
 
-      - name: Building 
-        run: |-
-          gcloud builds submit \
-            --tag gcr.io/YOUR_PROJECT_ID/SERVICE_ID
+        name: Setup Gcloud Account
+        runs-on: ubuntu-latest
+        env:
+          IMAGE_NAME: gcr.io/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_APP_NAME }}
+        steps:
 
+        - name: Login
+          uses: google-github-actions/setup-gcloud@v0
+          with:
+            project_id: ${{ secrets.GCP_PROJECT_ID }}
+            service_account_email: ${{ secrets.GCP_EMAIL }}
+            service_account_key: ${{ secrets.GCP_CREDENTIALS }}
 
-      # Setup gcloud CLI
-      - name: Deploy
-        uses: google-github-actions/deploy-cloudrun@main
-        with:
-          service: SERVICE_ID
-          image: gcr.io/YOUR_PROJECT_ID/SERVICE_ID
+        - name: Configure Docker
+          run: gcloud auth configure-docker --quiet
 
-          region: REGION
-          credentials: ${{ secrets.GCP_SA_KEY_JSON }}
-          project_id: YOUR_PROJECT_ID
+        - name: Checkout repository
+          uses: actions/checkout@v2
+
+        - name: Build Docker image
+          run: docker build . -t $IMAGE_NAME
+
+        - name: Test Docker image
+          run: docker run $IMAGE_NAME sh -c "go test -v"
+
+        - name: Push Docker image
+          run: docker push $IMAGE_NAME
+
+        - name: Deploy Docker image
+          run: gcloud run deploy ${{ secrets.GCP_PROJECT_ID }} --image $IMAGE_NAME --region us-central1 --platform managed
